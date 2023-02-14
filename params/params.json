@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "CidrIp",
+    "ParameterValue": "10"
+  },
+  {
+    "ParameterKey": "Project", 
+    "ParameterValue": "sample-nw"
+  }
+]
