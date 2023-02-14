@@ -1,7 +1,9 @@
 # aws-plane-network
 
-VPC と PublicSubnet を作成するテンプレートです。
-(InternetGateway や RouteTable も含みます。)
+Fargate の稼働環境を CloudFormation から作成するテンプレート
+
+詳細は以下ブログ参照
+https://hitolog.blog/2023/02/15/organize_fargate_cloudformation/
 
 # 準備
 
@@ -26,10 +28,11 @@ PROFILE=<YOUR_PROFILE_NAME>
 --profile $(PROFILE) \
 ```
 
-# パラメータの編集
+## パラメータの編集
 
 テンプレートに渡すパラメータは`params/params.json`で定義します。
 VPC の IP アドレス第 2 オクテットと、プレフィックスなどに用いる文字列を指定できます。
+デフォルトでは以下のパラメータが指定されています。
 
 ```
 [
@@ -39,7 +42,7 @@ VPC の IP アドレス第 2 オクテットと、プレフィックスなどに
   },
   {
     "ParameterKey": "Project",
-    "ParameterValue": "sample-nw"
+    "ParameterValue": "sample"
   }
 ]
 ```

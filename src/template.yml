@@ -88,3 +88,152 @@ Resources:
     Properties:
       SubnetId: !Ref SubnetPublic2
       RouteTableId: !Ref RouteTableForPublicSubnet
+
+  ##----------------------------------##
+  # Task Execute Role                 
+  ##----------------------------------##
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Project}-task-role'
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ##----------------------------------##
+  # Security Group            
+  ##----------------------------------##
+  AlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${Project}-alb-sg"
+      GroupDescription: allowed http access from internet.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref Project
+        - Key: Project
+          Value: !Ref Project
+
+  EcsSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${Project}-ecs-sg"
+      GroupDescription: allowed http access from alb.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref AlbSg
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: !Ref Project
+        - Key: Project
+          Value: !Ref Project
+  ##----------------------------------##
+  # ALB            
+  ##----------------------------------##
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref AlbSg
+      Subnets:
+        - !Ref SubnetPublic1
+        - !Ref SubnetPublic2
+      Tags:
+        - Key: Name
+          Value: !Ref Project
+        - Key: Project
+          Value: !Ref Project
+  AlbTg:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      VpcId: !Ref Vpc
+      Name: !Sub "${Project}-tg"
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+      Tags:
+        - Key: Name
+          Value: !Ref Project
+        - Key: Project
+          Value: !Ref Project
+
+  AlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTg
+
+  ##----------------------------------##
+  # TaskDefinition            
+  ##----------------------------------##
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${Project}-ecs-task"
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      Cpu: 256
+      Memory: 512
+      ContainerDefinitions:
+        - Name: !Sub "${Project}-container"
+          Image: nginx:latest
+          PortMappings:
+            - HostPort: 80
+              Protocol: tcp
+              ContainerPort: 80
+
+  ##----------------------------------##
+  # Cluster          
+  ##----------------------------------##
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${Project}-cluster"
+  ##----------------------------------##
+  # Service      
+  ##----------------------------------##
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: Alb
+    Properties:
+      Cluster: !Ref Cluster
+      LoadBalancers:
+        - TargetGroupArn: !Ref AlbTg
+          ContainerPort: 80
+          ContainerName: !Sub "${Project}-container"
+      LaunchType: FARGATE
+      DesiredCount: 3
+      TaskDefinition: !Ref TaskDefinition
+      ServiceName: !Sub "${Project}-service"
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref EcsSg
+          Subnets:
+            - !Ref SubnetPublic1
+            - !Ref SubnetPublic2
